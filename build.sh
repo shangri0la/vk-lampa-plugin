@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Сборка vk-video.js: исходник плагина + встроенный QR-генератор
+# Сборка vk-video.js: утилиты + плагин + встроенный QR-генератор
 set -e
 cd "$(dirname "$0")"
 
@@ -10,6 +10,8 @@ cd "$(dirname "$0")"
   echo " */"
   echo ""
   cat vendor/qrcode-lib.js
+  echo ""
+  cat src-utils.js
   echo ""
   cat src-plugin.js
 } > vk-video.js
