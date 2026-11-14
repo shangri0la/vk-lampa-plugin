@@ -12,7 +12,7 @@
     'use strict';
 
     var GUARD = 'vk_video_plugin_loaded';
-    var VERSION = '1.3.1';
+    var VERSION = '1.3.2';
     var UPDATE_URL = 'https://shangri0la.github.io/vk-lampa-plugin/version.json';
 
     var API = 'https://api.vk.com/method/';
@@ -24,10 +24,19 @@
 
     // Публичное standalone-приложение по умолчанию. VK последовательно заблокировал
     // известные публичные app_id (Kate Mobile 2685278 «Access denied [15]», VK Me,
-    // VK Admin, VK Android и ещё ~20 — все «application is blocked»).
-    // На 14.11.2026 живым остаётся Square Fit (6885762) — страница входа открывается.
-    // Если VK закроет и его — в настройках есть поле «VK App ID» для своего приложения.
-    var AUTH_APP_ID = '6885762';
+    // VK Admin, VK Android, Сферум и др. — все «application is blocked»).
+    // На 14.11.2026 страницу входа открывают: vk.com 6287487, Маруся 6463690,
+    // Square Fit 6885762, VK Почта 7799655, Prisma 5530956, Instagram 3698024.
+    // В панели подключения есть переключатель между ними + своё приложение в настройках.
+    var AUTH_APP_ID = '6287487'; // официальное приложение vk.com
+    var AUTH_APP_CHOICES = [
+        { id: '6287487', name: 'vk.com' },
+        { id: '6463690', name: 'Маруся' },
+        { id: '6885762', name: 'Square Fit' },
+        { id: '7799655', name: 'VK Почта' },
+        { id: '5530956', name: 'Prisma' },
+        { id: '3698024', name: 'Instagram' }
+    ];
 
     function authAppId() {
         // Storage.get может вернуть число для числовой строки — поэтому String()
@@ -553,6 +562,7 @@
     function buildAuthPanel(onConnected, withGroups) {
         // ссылка считается в момент нажатия — чтобы подхватить свежий App ID из настроек
         var currentUrl = function () { return buildAuthUrl(withGroups); };
+        var currentApp = authAppId();
         var extra = withGroups
             ? '<div style="margin-top:.5em;color:#7fb2ff;">Права сообществ включены: после входа откроются видео ваших групп.</div>'
             : '';
@@ -578,6 +588,25 @@
                 panel.find('.vk-auth__qr').append(qr.createImgTag(4, 8));
             }
         } catch (e) {}
+
+        // Переключатель приложения входа: VK блокирует публичные app_id по одному,
+        // поэтому даём попробовать все живые + указываем своё из настроек
+        var appsHtml = '<div class="vk-auth__apps" style="margin-top:1em;padding-top:.8em;border-top:1px solid rgba(255,255,255,.1);">' +
+            '<div style="opacity:.6;">Приложение для входа: <b>' + currentApp + '</b>. ' +
+            'VK не пускает после входа? Попробуйте другое — QR и ссылка обновятся:</div>' +
+            '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:.6em;">';
+        AUTH_APP_CHOICES.forEach(function (a) {
+            var mark = a.id === currentApp ? ' ✓' : '';
+            appsHtml += '<div class="vk-auth__app selector" data-app="' + a.id + '" style="background:' +
+                (a.id === currentApp ? '#0077FF' : 'rgba(255,255,255,.08)') +
+                ';border-radius:8px;padding:.5em .9em;">' + a.name + mark + '</div>';
+        });
+        appsHtml += '</div></div>';
+        panel.find('.vk-auth__buttons').before(appsHtml);
+        panel.find('.vk-auth__app').on('hover:enter', function () {
+            Lampa.Storage.set('vk_video_appid', $(this).data('app'));
+            if (Lampa.Activity && Lampa.Activity.refresh) Lampa.Activity.refresh();
+        });
 
         var buttons = panel.find('.vk-auth__btn');
         buttons.eq(0).on('hover:enter', function () {
