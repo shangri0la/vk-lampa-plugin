@@ -2455,7 +2455,7 @@ if (typeof module !== 'undefined' && module.exports) {
     'use strict';
 
     var GUARD = 'vk_video_plugin_loaded';
-    var VERSION = '1.3.0';
+    var VERSION = '1.3.1';
     var UPDATE_URL = 'https://shangri0la.github.io/vk-lampa-plugin/version.json';
 
     var API = 'https://api.vk.com/method/';
@@ -2465,16 +2465,21 @@ if (typeof module !== 'undefined' && module.exports) {
     var REQUEST_TIMEOUT = 20000;
     var RESOLVE_TTL = 20 * 60 * 1000; // подписанные CDN-ссылки живут часами; кэш на 20 минут
 
-    // Публичное standalone-приложение по умолчанию (Kate Mobile — единственное
-    // живое; VK отключил остальные). Можно заменить своим app_id в настройках.
-    var AUTH_APP_ID = '2685278';
+    // Публичное standalone-приложение по умолчанию. VK последовательно заблокировал
+    // известные публичные app_id (Kate Mobile 2685278 «Access denied [15]», VK Me,
+    // VK Admin, VK Android и ещё ~20 — все «application is blocked»).
+    // На 14.11.2026 живым остаётся Square Fit (6885762) — страница входа открывается.
+    // Если VK закроет и его — в настройках есть поле «VK App ID» для своего приложения.
+    var AUTH_APP_ID = '6885762';
 
     function authAppId() {
-        try {
-            return (Lampa.Storage.field('vk_video_appid') || '').trim() || AUTH_APP_ID;
-        } catch (e) {
-            return AUTH_APP_ID;
+        // Storage.get может вернуть число для числовой строки — поэтому String()
+        var v = '';
+        try { v = String(Lampa.Storage.get('vk_video_appid', '') || '').trim(); } catch (e) {}
+        if (!v) {
+            try { v = String(Lampa.Storage.field('vk_video_appid') || '').trim(); } catch (e) {}
         }
+        return v || AUTH_APP_ID;
     }
 
     function buildAuthUrl(withGroups) {
@@ -2557,9 +2562,9 @@ if (typeof module !== 'undefined' && module.exports) {
 
     function getToken() {
         try {
-            return (Lampa.Storage.field('vk_video_token') || '').trim();
+            return String(Lampa.Storage.field('vk_video_token') || '').trim();
         } catch (e) {
-            return (Lampa.Storage.get('vk_video_token', '') || '').trim();
+            return String(Lampa.Storage.get('vk_video_token', '') || '').trim();
         }
     }
 
@@ -2989,7 +2994,8 @@ if (typeof module !== 'undefined' && module.exports) {
     }
 
     function buildAuthPanel(onConnected, withGroups) {
-        var url = buildAuthUrl(withGroups);
+        // ссылка считается в момент нажатия — чтобы подхватить свежий App ID из настроек
+        var currentUrl = function () { return buildAuthUrl(withGroups); };
         var extra = withGroups
             ? '<div style="margin-top:.5em;color:#7fb2ff;">Права сообществ включены: после входа откроются видео ваших групп.</div>'
             : '';
@@ -3010,7 +3016,7 @@ if (typeof module !== 'undefined' && module.exports) {
         try {
             if (typeof qrcode === 'function') {
                 var qr = qrcode(0, 'M');
-                qr.addData(url);
+                qr.addData(currentUrl());
                 qr.make();
                 panel.find('.vk-auth__qr').append(qr.createImgTag(4, 8));
             }
@@ -3018,11 +3024,11 @@ if (typeof module !== 'undefined' && module.exports) {
 
         var buttons = panel.find('.vk-auth__btn');
         buttons.eq(0).on('hover:enter', function () {
-            var w = window.open(url, '_blank');
+            var w = window.open(currentUrl(), '_blank');
             if (!w) Lampa.Noty.show('Браузер заблокировал открытие. Используйте ссылку или QR-код.');
         });
         buttons.eq(1).on('hover:enter', function () {
-            Lampa.Utils.copyTextToClipboard(url, function () {
+            Lampa.Utils.copyTextToClipboard(currentUrl(), function () {
                 Lampa.Noty.show('Ссылка скопирована. Откройте её на любом устройстве.');
             }, function () {
                 Lampa.Noty.show('Не удалось скопировать. Отсканируйте QR-код телефоном.');
@@ -3706,7 +3712,11 @@ if (typeof module !== 'undefined' && module.exports) {
             Lampa.SettingsApi.addParam({
                 component: 'vk_video_settings',
                 param: { name: 'vk_video_appid', type: 'input', default: '', values: '' },
-                field: { name: 'VK App ID (своё приложение)', description: 'Оставьте пустым, чтобы использовать встроенное. Пригодится, если VK закроет встроенное' }
+                field: { name: 'VK App ID (своё приложение)', description: 'Оставьте пустым, чтобы использовать встроенное. Пригодится, если VK закроет встроенное' },
+                onChange: function () {
+                    // перерисовать экран подключения — QR и ссылка подхватят новый App ID
+                    if (Lampa.Activity && Lampa.Activity.refresh) Lampa.Activity.refresh();
+                }
             });
             Lampa.SettingsApi.addParam({
                 component: 'vk_video_settings',
